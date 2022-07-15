@@ -1,0 +1,37 @@
+program := { statements }
+
+statements := statement statements*
+
+statement := block
+           | varDecl
+           | ifStmt
+           | whileStmt
+           | fnDecl
+           | expression
+           | continue
+           | break
+           | return
+           
+
+varDecl := 'var' ident ':=' expr ';'
+
+ifStmt := 'if' '(' boolExpr ')' statement { else }
+else   := 'else' statement
+        
+whileStmt := 'if' '(' boolExpr ')' statement
+
+block := '{' statements '}'
+
+fnDecl := 'fn' ident '(' params ')' funBlock
+params := { ident (',' ident)* }
+funBlock := '{' (statements | return ) '}'
+return := 'return' expression ';'
+
+expression := boolExpr
+            | arithExpr
+
+boolExpr := bool 
+          | boolUnOp boolExpr
+          | boolExpr boolBinOp boolExpr
+          | arithExpr arithCmp arithExpr
+
