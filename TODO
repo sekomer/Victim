@@ -1,5 +1,5 @@
 [ ] file operations
-[ ] switch
+[*] case when otherwise
 [ ] for
 [ ] struct
 [ ] array
@@ -8,4 +8,3 @@
 [*] continue
 [*] lambda
 [*] comparision between bool and integer
-

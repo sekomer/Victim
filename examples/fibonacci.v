@@ -9,7 +9,7 @@ fn fibo (n)
     -- 0 1 1 2 3 5 8 ...
 
     var prev := 1;
-	var curr := 0;
+    var curr := 0;
 
 	while (n > 1)
 	{

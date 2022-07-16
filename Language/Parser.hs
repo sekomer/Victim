@@ -41,62 +41,96 @@ parseStatement = padSpaces $ choice
    , parseFunc
    , parseReturn 
    , parseBreak 
-   , parseContinue ]
+   , parseContinue
+   , parseSwitch 
+   , parseEmpty ]
+
+
+parseEmpty :: Parser Statement
+parseEmpty = do
+    padSpaces semi
+    return Pass
+
+parseSwitch :: Parser Statement
+parseSwitch = do
+    reserved "case"
+    e' <- parens $ padSpaces expression
+
+    padChar '{'
+    cases <- many1 $ do 
+        reserved "when"
+        cond <- padSpaces expression
+        reservedOp "=>"
+        body <- parseStatement
+        pure (cond, body)
+
+    last' <- (reserved "otherwise" >> reservedOp "=>" >> parseStatement) <|> pure Pass
+
+    padChar '}'
+
+    return $ Seq [ VarDecl tmpVarName e', convert2If cases last']
+    where
+        convert2If :: [(Expression, Statement)] -> Statement -> Statement
+        convert2If [] l = l
+        convert2If ((e,s):es) l = If (Binary CmpEQ tmpVar e) s (convert2If es l)
+
+        tmpVar = Literal (Variable tmpVarName)
+        tmpVarName = "%match"
 
 
 parseBreak :: Parser Statement
 parseBreak = do
-   reserved "break"
-   padSpaces semi
-   return Break
+    reserved "break"
+    padSpaces semi
+    return Break
 
 parseContinue :: Parser Statement
 parseContinue = do
-   reserved "continue"
-   padSpaces semi
-   return Continue
+    reserved "continue"
+    padSpaces semi
+    return Continue
 
 parseFunc :: Parser Statement
 parseFunc = do 
-   reserved "fn"
-   ident <- identifier
-   params <- parens (sepBy identifier (padChar ','))
-   body <- parseBlock
-   return $ FnDecl ident params body
+    reserved "fn"
+    ident <- identifier
+    params <- parens (sepBy identifier (padChar ','))
+    body <- parseBlock
+    return $ FnDecl ident params body
 
 
 parseReturn :: Parser Statement
 parseReturn = do
-   reserved "return"
-   expr <- expression <|> pure (Literal Null)
-   padSpaces semi
-   return $ Return expr
+    reserved "return"
+    expr <- expression <|> pure (Literal Null)
+    padSpaces semi
+    return $ Return expr
 
 
 parseWhile :: Parser Statement
 parseWhile = do
-   reserved "while"
-   cond <- parens expression
-   body <- parseStatement
-   return $ While cond body
+    reserved "while"
+    cond <- parens expression
+    body <- parseStatement
+    return $ While cond body
 
 parseVarDecl :: Parser Statement
 parseVarDecl = do 
-   reserved "var"
-   ident <- identifier
-   reservedOp ":="
-   expr <- expression
-   padSpaces semi
-   return $ VarDecl ident expr
+    reserved "var"
+    ident <- identifier
+    reservedOp ":="
+    expr <- expression
+    padSpaces semi
+    return $ VarDecl ident expr
    
 
 parseIfStmt :: Parser Statement
 parseIfStmt = do
-   reserved "if"
-   cond <- padSpaces (parens expression)
-   tbody <- parseStatement
-   fbody <- (reserved "else" *> parseStatement <|> pure Pass)
-   return $ If cond tbody fbody
+    reserved "if"
+    cond <- padSpaces (parens expression)
+    tbody <- parseStatement
+    fbody <- (reserved "else" *> parseStatement <|> pure Pass)
+    return $ If cond tbody fbody
 
 
 parseBlock :: Parser Statement
@@ -224,7 +258,7 @@ lexer = Token.makeTokenParser $
              , Token.identStart      = letter <|> char '_'
              , Token.identLetter     = alphaNum <|> char '_'
              , Token.reservedNames   = [ "true", "false"
-                                       , "if", "else"
+                                       , "if", "else", "case", "otherwise", "when"
                                        , "while"
                                        , "var", "null"
                                        , "anon"
@@ -232,7 +266,7 @@ lexer = Token.makeTokenParser $
                                        , "break", "continue" ]
              , Token.reservedOpNames = [ "-", "!", ":="
                                        , "**"
-                                       , "->"
+                                       , "->", "=>"
                                        , "*", "/", "+", "-", "%"
                                        , ">", ">=", "<", "<="
                                        , "==", "!="

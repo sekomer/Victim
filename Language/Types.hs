@@ -31,13 +31,13 @@ data Expression
     | Call String [Expression]
     | Assign String Expression
     | Lambda [String] Expression
-    deriving (Show)
+    deriving (Eq, Show)
 
 
 data UnOp
     = Negate
     | Not
-    deriving (Show)
+    deriving (Eq, Show)
 
 
 {-

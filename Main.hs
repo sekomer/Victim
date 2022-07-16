@@ -1,10 +1,5 @@
 {-
-    Victim Programming Language
-
-    name inspired by libc malloc source code xd 
-    source: https://code.woboq.org/userspace/glibc/malloc/malloc.c.html#3038
-
-    LICENCE: WTFPL
+    Victim programming language interpreter entry point
 -}
 
 
@@ -13,6 +8,7 @@ module Main (main) where
 import Language.Parser ( parseCode )
 import Language.Interpreter ( runInterpreter )
 import System.Environment (getArgs)
+
 
 main :: IO ()
 main = do
