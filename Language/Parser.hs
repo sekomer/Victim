@@ -9,9 +9,10 @@ import Text.Parsec.Expr
     ( buildExpressionParser
     , Assoc(AssocRight, AssocLeft)
     , Operator(Infix, Prefix) )
-      
+
 import Text.Parsec.Token qualified as Token
 import Text.Parsec.Language ( emptyDef )
+import GHC.ByteOrder (ByteOrder(LittleEndian))
 
 
 type Parser = Parsec String ()
@@ -34,16 +35,33 @@ parseStatements = Seq <$> many parseStatement
 parseStatement :: Parser Statement
 parseStatement = padSpaces $ choice
    [ parseBlock
+   , parseFor
    , parseVarDecl
    , parseIfStmt
    , parseExpression
-   , parseWhile 
+   , parseWhile
    , parseFunc
-   , parseReturn 
-   , parseBreak 
+   , parseReturn
+   , parseBreak
    , parseContinue
-   , parseSwitch 
+   , parseSwitch
    , parseEmpty ]
+
+
+{-
+    for (; i < cond; i++)
+
+-}
+parseFor :: Parser Statement
+parseFor = do
+    reserved "for"
+    (initial, cond, after) <- parens $ do
+        initial <- parseVarDecl <|> parseEmpty
+        cond <- expression <|> pure (Literal (Bool True))
+        padSpaces semi
+        after <- sepBy expression (padChar ',')
+        return (initial, cond, after)
+    For initial cond after `fmap` parseStatement
 
 
 parseEmpty :: Parser Statement
@@ -57,7 +75,7 @@ parseSwitch = do
     e' <- parens $ padSpaces expression
 
     padChar '{'
-    cases <- many1 $ do 
+    cases <- many1 $ do
         reserved "when"
         cond <- padSpaces expression
         reservedOp "=>"
@@ -91,7 +109,7 @@ parseContinue = do
     return Continue
 
 parseFunc :: Parser Statement
-parseFunc = do 
+parseFunc = do
     reserved "fn"
     ident <- identifier
     params <- parens (sepBy identifier (padChar ','))
@@ -115,14 +133,14 @@ parseWhile = do
     return $ While cond body
 
 parseVarDecl :: Parser Statement
-parseVarDecl = do 
+parseVarDecl = do
     reserved "var"
     ident <- identifier
     reservedOp ":="
     expr <- expression
     padSpaces semi
     return $ VarDecl ident expr
-   
+
 
 parseIfStmt :: Parser Statement
 parseIfStmt = do
@@ -208,11 +226,11 @@ parseAssign = do
 
 
 parseObject :: Parser Object
-parseObject = choice 
+parseObject = choice
    [ parseNumber
    , parseBool
    , parseString
-   , parseNull ] 
+   , parseNull ]
    where
       parseNumber :: Parser Object
       parseNumber = do
@@ -222,7 +240,7 @@ parseObject = choice
                Right flt -> Double  flt
 
       parseBool :: Parser Object
-      parseBool = Bool <$> choice 
+      parseBool = Bool <$> choice
          [ reserved "true"  >> return True
          , reserved "false" >> return False ]
 

@@ -1,6 +1,6 @@
 [ ] file operations
 [*] case when otherwise
-[ ] for
+[*] for
 [ ] struct
 [ ] array
 [ ] hash-map
@@ -8,3 +8,4 @@
 [*] continue
 [*] lambda
 [*] comparision between bool and integer
+[ ] modulus between integer and double

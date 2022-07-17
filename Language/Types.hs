@@ -13,6 +13,7 @@ data Statement
     | Expression Expression
     | If Expression Statement Statement
     | While Expression Statement
+    | For Statement Expression [Expression] Statement
     | VarDecl String Expression
     | FnDecl String [String] Statement
     | Return Expression

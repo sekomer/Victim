@@ -80,7 +80,7 @@ else    print( "unknown operation!" );
 ```
 
 ### **Case**
-`case` statements are clean alternatives of `if-else` statements. `case` keyword used to a case statement, following expression is evaluated once and compared with the values of each `when` label. If none of them match, `otherwise` is executed.
+`case` statements are clean alternatives of `if-else` statements. `case` keyword used to create a case statement, following expression is evaluated once and compared with the values of each `when` label. If none of them match, `otherwise` is executed.
 
 ```cs
 var a  := 2;
@@ -108,7 +108,20 @@ case (op)
 ```
 
 ### **Loops**
-`while` keyword is used to create a `loop` statement.
+
+`while` and `for` keywords are used to create `loop` statements.
+
+#### **[*] while**
+
+`while` loops in the `Victim` language contain 2 sections; cond and body. 
+
+while `cond` expression is true, the `body` block is executed.
+
+```
+[ pseudo ]
+while (cond) { statement(s); }
+```
+
 ```cs
 var condition := true;
 
@@ -117,7 +130,44 @@ while (condition)
     print( "YES!" );
 }
 ```
+
+#### **[*] for**
+
+`for` loops in the `Victim` language contain 4 sections; init, cond, after and body. 
+
+`init` section is used for the decleration or assignment of variables.
+
+`cond` section is evaluated before each execution the body. If it is left empty, it's considered as `true` like in [the language of the gods](https://en.wikipedia.org/wiki/C_(programming_language)).
+
+`after` section is evaluated after each execution of the `body`. It can be empty.
+
+`body` section contains what will be executed in the `loop` statement.
+
+```
+[ pseudo ]
+for (init; cond; after) { statement(s); }
+```
+
+```cs
+for (var i := 0; i < 42; i := i + 1)
+{
+    print( i );
+}
+```
+
+following statements are also valid in `Victim`.
+```cs
+for (;;)
+    print( "C is the best!" );
+
+for (;; print("C is the best!"));
+
+-- like the good old C
+```
+
 loops support both `continue` and `break` statements.
+
+
 
 ### **Functions**
 

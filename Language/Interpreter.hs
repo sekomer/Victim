@@ -59,7 +59,7 @@ execute  = \case
             then execute tbody
             else execute fbody
 
-    While cond body         -> do
+    While cond body -> do
         cond' <- evaluate cond
         b <- case cond' of
             Variable s -> do
@@ -74,7 +74,18 @@ execute  = \case
                 ContinueException -> execute (While cond body)
                 exception         -> throwError exception
 
-    VarDecl name value      -> do
+    For initial cond after body -> do
+        modify Env.createEnv
+
+        execute initial
+        runFor cond after body `catchError` \case
+           BreakException -> pure ()
+           e -> throwError e
+
+        modify Env.dropEnv
+
+
+    VarDecl name value -> do
         eval <- evaluate value
         modify (Env.define name eval)
         
@@ -89,6 +100,27 @@ execute  = \case
     
     Pass                    -> pure ()
 
+
+runFor :: Expression -> [Expression] -> Statement -> Interpreter ()
+runFor cond after body = do
+    cond' <- evaluate cond
+    b <- case cond' of
+        Variable s -> do
+            env <- get
+            case Env.get s env of
+                Just obj -> pure (truthy obj)
+                Nothing  -> throwError $ UndefinedVariable s
+        object -> pure $ truthy object
+    if b 
+    then do
+        execute body `catchError` \case
+            BreakException    -> throwError BreakException
+            ContinueException -> return ()
+            exception         -> throwError exception
+        traverse_ evaluate after
+        runFor cond after body
+    else
+        pure ()
 
 evaluate :: Expression -> Interpreter Object
 evaluate = \case

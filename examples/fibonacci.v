@@ -11,16 +11,16 @@ fn fibo (n)
     var prev := 1;
     var curr := 0;
 
-	while (n > 1)
-	{
-		var tmp := prev;
-		prev := curr;
-		curr := tmp + curr;
+    while (n > 1)
+    {
+        var tmp := prev;
+        prev := curr;
+        curr := tmp + curr;
 
-		n := n - 1;
-	}
+        n := n - 1;
+    }
 
-	return curr;
+    return curr;
 }
 
 
