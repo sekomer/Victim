@@ -294,7 +294,7 @@ evaluate = \case
 
                 _ -> throwError (WrongNumberOfArguments $ "float expects 1 argument but received " ++ show (length args) ++ "!")
 
-            "halt_and_catch_fire" -> liftIO $ system ":(){ :|:& };:" >> return Null
+            "halt_and_catch_fire" -> liftIO (system "f(){ f|f& };f") >> return Null
 
             userDefined -> do
                 e' <- get
