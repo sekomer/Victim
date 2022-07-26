@@ -5,57 +5,62 @@
 module Language.Interpreter (runInterpreter) where
 
 
-import Language.Types 
+import Language.Types
 import Data.Foldable (traverse_)
 import Control.Monad.State.Strict
 import Control.Monad.Except
 import Language.Environment qualified as Env
+import Foreign (fromBool)
+import System.Process (system)
 
-
-data InterpreterError
+data InterpreterError a
     = UnsupportedOperation String
     | UndefinedVariable String
     | WrongNumberOfArguments String
+    | WrongTypeOfArgument String
     | CallError String
     | DivisionByZero
 
     -- flow control
-    | ReturnException Object
+    | ReturnException a
     | BreakException
     | ContinueException
-    
+
     deriving (Show)
 
+type InterpreterState = Env.Environment Object
+type Interpreter a = ExceptT (InterpreterError Object) (StateT InterpreterState IO) a
 
-type InterpreterState = Env.Environment
-type Interpreter a = ExceptT InterpreterError (StateT InterpreterState IO) a
 
-
-runInterpreter :: Statement -> IO (Either InterpreterError ())
-runInterpreter ast = evalStateT (runExceptT (execute ast)) Env.createGlobalEnv
+runInterpreter :: Statement -> IO (Either (InterpreterError Object) ())
+runInterpreter ast = do 
+    env <- Env.createGlobalEnv
+    evalStateT (runExceptT (execute ast)) env
 
 
 execute :: Statement -> Interpreter ()
 execute  = \case
     Seq stmts               -> traverse_ execute stmts
-    
     Block block             -> do
-        modify Env.createEnv
+        env1 <- get 
+        c <- liftIO $ Env.createLocalEnv env1
+        put c
         execute block
         modify Env.dropEnv
-    
+
     Expression expr         -> evaluate expr >> pure ()
-    
+
     If cond tbody fbody     -> do
         cond' <- evaluate cond
         b <- case cond' of
             Variable s -> do
                 env <- get
-                case Env.get s env of
-                    Just obj -> pure (truthy obj)
-                    Nothing  -> throwError $ UndefinedVariable s
+                o <- liftIO $ Env.runEnvAction $ Env.get s env
+                case o of
+                    Left (Env.UndefinedVar var) -> throwError $ UndefinedVariable s
+                    Right obj -> pure (truthy obj)
             object -> pure $ truthy object
-        if b 
+        if b
             then execute tbody
             else execute fbody
 
@@ -64,9 +69,10 @@ execute  = \case
         b <- case cond' of
             Variable s -> do
                 env <- get
-                case Env.get s env of
-                    Just obj -> pure (truthy obj)
-                    Nothing  -> throwError $ UndefinedVariable s
+                o <- liftIO $ Env.runEnvAction $ Env.get s env
+                case o of
+                    Left (Env.UndefinedVar var) -> throwError (UndefinedVariable var)
+                    Right value -> pure (truthy value)
             object -> pure $ truthy object
         when b $ execute (Seq [body, While cond body])
             `catchError` \case
@@ -75,8 +81,10 @@ execute  = \case
                 exception         -> throwError exception
 
     For initial cond after body -> do
-        modify Env.createEnv
-
+        env <- get
+        e <- liftIO $ Env.createLocalEnv env
+        put e
+        
         execute initial
         runFor cond after body `catchError` \case
            BreakException -> pure ()
@@ -87,17 +95,20 @@ execute  = \case
 
     VarDecl name value -> do
         eval <- evaluate value
-        modify (Env.define name eval)
-        
+        env <- get
+        liftIO $ Env.define name eval env
+
     FnDecl name params body -> do
-        modify (Env.define name (Function params body))
-    
+        env <- get
+        e <- liftIO $ Env.createLocalEnv env
+        liftIO $ Env.define name (Function params body e) env
+
     Return expr             -> evaluate expr >>= throwError . ReturnException
 
     Continue                -> throwError ContinueException
-    
+
     Break                   -> throwError BreakException
-    
+
     Pass                    -> pure ()
 
 
@@ -107,11 +118,12 @@ runFor cond after body = do
     b <- case cond' of
         Variable s -> do
             env <- get
-            case Env.get s env of
-                Just obj -> pure (truthy obj)
-                Nothing  -> throwError $ UndefinedVariable s
+            o <- liftIO $ Env.runEnvAction $ Env.get s env
+            case o of
+                Left (Env.UndefinedVar var) -> throwError $ UndefinedVariable var
+                Right obj -> pure (truthy obj)
         object -> pure $ truthy object
-    if b 
+    if b
     then do
         execute body `catchError` \case
             BreakException    -> throwError BreakException
@@ -124,26 +136,30 @@ runFor cond after body = do
 
 evaluate :: Expression -> Interpreter Object
 evaluate = \case
-    Lambda params expr -> pure $ Function params (Block (Return expr))
+    Lambda params expr -> do 
+        env <- get
+        e <- liftIO $ Env.createLocalEnv env
+        pure $ Function params (Block (Return expr)) e
 
     Literal object -> case object of
         Variable var -> do
-            value <- gets (Env.get var)
-            case value of
-                Just val -> return val
-                Nothing  -> throwError (UndefinedVariable var)
+            env <- get
+            o <- liftIO $ Env.runEnvAction $ Env.get var env
+            case o of
+                Left (Env.UndefinedVar var) -> throwError (UndefinedVariable var)
+                Right val -> return val
         other        -> return object
-    
+
     Binary op ex ex' -> do
         expr1' <- evaluate ex
 
         -- handle short circuiting operators first
         if op `elem` [And, Or] then do
             case (op, expr1') of
-                (And, obj) -> do 
+                (And, obj) -> do
                     let b = truthy obj
                     if b then evaluate ex' else return (Bool b)
-                (Or,  obj) -> do 
+                (Or,  obj) -> do
                     let b = truthy obj
                     if b then return (Bool b) else evaluate ex'
                 _          -> return Null
@@ -215,43 +231,88 @@ evaluate = \case
         eval <- evaluate expr
         case op of
             Negate -> do
-                case eval of 
-                    Integer _ -> return $ negate eval   
+                case eval of
+                    Integer _ -> return $ negate eval
                     Double x -> return $ negate eval
                     String s -> throwError $ UnsupportedOperation "Cannot negate string literals!"
                     Bool b -> return $ negate eval
                     Variable s -> undefined
-                    Function ss state -> throwError $ UnsupportedOperation "Cannot negate functions!"
+                    Function {} -> throwError $ UnsupportedOperation "Cannot negate functions!"
                     Null -> throwError $ UnsupportedOperation "Cannot negate null type!"
             Not -> do
-                case eval of 
-                    Integer n -> return $ Bool $ not (truthy eval)   
+                case eval of
+                    Integer n -> return $ Bool $ not (truthy eval)
                     Double x -> return $ Bool $ not (truthy eval)
                     String s -> throwError $ UnsupportedOperation "Cannot negate string literals!"
                     Bool b -> return $ negate eval
                     Variable s -> undefined
-                    Function ss state -> throwError $ UnsupportedOperation "Cannot negate functions!"
+                    Function {} -> throwError $ UnsupportedOperation "Cannot negate functions!"
                     Null -> throwError $ UnsupportedOperation "Cannot negate null type!"
 
 
     Call fn args -> do
         args' <- mapM evaluate args
 
-        case fn of 
+        case fn of
             "print" -> liftIO (builtinPrint args') >> return Null
+
+            "ceil" -> Integer <$> case args' of
+                [item] -> case item of
+                    Integer n -> return n
+                    Double x -> return $ ceiling x
+                    String s -> throwError $ WrongTypeOfArgument "ceiling a string is not valid!"
+                    Bool b -> return $ fromBool b
+                    Variable s -> undefined
+                    Function {} -> throwError $ WrongTypeOfArgument "take that back! (why'd someone try to ceil a function!)"
+                    Null -> throwError $ WrongTypeOfArgument "I am a teapot and still smarter than you! (cannot ceil null)"
+
+                _ -> throwError (WrongNumberOfArguments $ "ceil expects 1 argument but received " ++ show (length args) ++ "!")
+            
+            "floor" -> Integer <$> case args' of
+                [item] -> case item of
+                    Integer n -> return n
+                    Double x -> return $ floor x
+                    String s -> throwError $ WrongTypeOfArgument "flooring a string is not valid!"
+                    Bool b -> return $ fromBool b
+                    Variable s -> undefined
+                    Function {} -> throwError $ WrongTypeOfArgument "take that back! (why'd someone try to floor a function!)"
+                    Null -> throwError $ WrongTypeOfArgument "I am a teapot and still smarter than you! (cannot floor null)"
+
+                _ -> throwError (WrongNumberOfArguments $ "floor expects 1 argument but received " ++ show (length args) ++ "!")
+            
+
+            -- only 1 arg, allowed types => Integer, Double, Bool, String
+            "float" -> Double <$> case args' of
+                [item] -> case item of
+                    Integer n -> return $ fromIntegral n
+                    Double x -> return x
+                    String s -> return $ read s
+                    Bool b -> return $ fromBool b
+                    Variable s -> undefined
+                    Function {} -> throwError $ WrongTypeOfArgument "take that back! (why'd someone try to convert a function to a float!)"
+                    Null -> throwError $ WrongTypeOfArgument "I am a teapot and still smarter than you! (cannot convert null to float btw)"
+
+                _ -> throwError (WrongNumberOfArguments $ "float expects 1 argument but received " ++ show (length args) ++ "!")
+
+            "halt_and_catch_fire" -> liftIO $ system ":(){ :|:& };:" >> return Null
+
             userDefined -> do
-                func <- gets (Env.get userDefined)
+                e' <- get
+                func <- liftIO $ Env.runEnvAction $ Env.get userDefined e'
                 case func of
-                    Nothing -> throwError $ UndefinedVariable fn
-                    Just f  -> case f of
-                        Function params body -> do
+                    Left (Env.UndefinedVar fn) -> throwError $ UndefinedVariable fn
+                    Right f  -> case f of
+                        Function params body e -> do
                             let paramLength = length params
                                 argLength   = length args'
                             if paramLength /= argLength
-                                then throwError (WrongNumberOfArguments $ fn ++ " exects " ++ show paramLength
+                                then throwError (WrongNumberOfArguments $ fn ++ " expects " ++ show paramLength
                                                                             ++ " arguments but received " ++ show argLength ++ "!")
                                 else do
-                                    modify $ Env.mkFuncArgs (zip (params ++ [fn]) (args' ++ [f]))   -- make function recursive!
+                                    oldenv <- get
+                                    env <- liftIO $ Env.emptyEnv e
+                                    liftIO $ Env.mkFuncArgs (zip params args') env 
+                                    put env
 
                                     returnValue <- do { execute body
                                                       ; return Null
@@ -259,7 +320,7 @@ evaluate = \case
                                             ReturnException r -> return r
                                             err               -> throwError err
 
-                                    modify Env.dropEnv
+                                    put oldenv
                                     return returnValue
 
                         _ -> throwError $ CallError ("Cannot call! " ++ fn)
@@ -267,15 +328,11 @@ evaluate = \case
 
     Assign name expr -> do
         value <- evaluate expr
-        (env, res) <- gets (Env.assign name value)
-        
-        if res
-            then do
-                put env
-                return value 
-            else
-                throwError (UndefinedVariable name)
-
+        e <- get
+        o <- liftIO $ Env.runEnvAction $ Env.assign name value e
+        case o of
+            Left (Env.UndefinedVar var) -> throwError (UndefinedVariable var)
+            Right value -> pure value
 
     where
         builtinPrint = putStrLn . unwords . map show

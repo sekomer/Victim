@@ -1,12 +1,14 @@
 # **Victim**
 
-`Victim` is dynamically typed interpreted scripting language written in `Haskell`. The name is inspired by source code of [malloc](https://code.woboq.org/userspace/glibc/malloc/malloc.c.html#3038).
+`Victim` is dynamically typed lexically scoped interpreted scripting language written in `Haskell`. The name is inspired by source code of [malloc](https://code.woboq.org/userspace/glibc/malloc/malloc.c.html#3038).
 
 ## **Installation**
 
 You need `Glasgow Haskell Compiler` and `Cabal` to install `Victim` interpreter on your computer.
 
 ```bash
+git clone https://github.com/Sekomer/Victim
+cd Victim
 cabal install -O2 --overwrite-policy=always 
 ```
 creates `Victim` symlink to original binary.

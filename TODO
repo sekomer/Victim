@@ -7,5 +7,7 @@
 [*] break
 [*] continue
 [*] lambda
+[*] lexical scoping
 [*] comparision between bool and integer
 [ ] modulus between integer and double
+[*] floor and ceil functions

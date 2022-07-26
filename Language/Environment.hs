@@ -1,66 +1,101 @@
-{-#  LANGUAGE LambdaCase  #-}
-{-# LANGUAGE ImportQualifiedPost #-}
+{-#  LANGUAGE LambdaCase           #-}
+{-#  LANGUAGE OverloadedLists      #-}
+{-#  LANGUAGE ImportQualifiedPost  #-}
 
 
-module Language.Environment 
+module Language.Environment
 ( Environment                   -- Environment Type
 , createGlobalEnv               -- Environment
-, createEnv                     -- Environment
+, createLocalEnv                -- Environment
 , dropEnv                       -- Environment -> Environment
-, get                           -- String -> Environment -> Maybe Object
-, define                        -- String -> Object -> Environment -> Environment
-, assign                        -- String -> Object -> Environment -> (Environment, Bool)
-, mkFuncArgs                    -- [(String, Object)] -> Environment -> Environment
+, get                           -- String -> Environment -> Maybe a
+, define                        -- String -> a -> Environment -> Environment
+, assign                        -- String -> a -> Environment -> (Environment, Bool)
+, mkFuncArgs                    -- [(String, a)] -> Environment -> Environment
+, runEnvAction
+, emptyEnv
+, EnvError(..)
 ) where
 
-import Language.Types ( Object )
-import Data.Map.Strict         (Map)
+import Data.Map.Strict             (Map)
 import Data.Map.Strict qualified as Map
+import Data.IORef
+import Control.Monad.Except
+
+newtype EnvError = UndefinedVar String
+
+type EnvAction a = ExceptT EnvError IO a
+
+runEnvAction :: EnvAction a -> IO (Either EnvError a)
+runEnvAction = runExceptT
 
 
-type Env = Map String Object
+type Env a = IORef (Map String a)
 
-data Environment
-    = Global Env
-    | Local  Env Environment    -- local, parent
+data Environment a
+    = Global (Env a)
+    | Local  (Env a) (Environment a)    -- local, parent
 
-createGlobalEnv :: Environment
-createGlobalEnv = Global Map.empty
+createEnv :: IO (Env a)
+createEnv = newIORef []
 
-createEnv :: Environment -> Environment
-createEnv = Local Map.empty
+createGlobalEnv :: IO (Environment a)
+createGlobalEnv = Global <$> createEnv
 
-dropEnv :: Environment -> Environment
+createLocalEnv :: Environment a -> IO (Environment a)
+createLocalEnv p = do
+    e <- createEnv
+    pure $ Local e p 
+
+dropEnv :: Environment a -> Environment a
 dropEnv = \case
     Global _ -> error "cannot drop global env!"
     Local _ p -> p
 
-get :: String -> Environment -> Maybe Object
+getEnv :: Environment a -> Env a
+getEnv (Global e) = e
+getEnv (Local e p) = e
+
+get :: String -> Environment a -> EnvAction a
 get name = \case 
-    Global e   -> Map.lookup name e
-    Local  e p -> 
-        case Map.lookup name e of 
+    Global e   -> do
+        env <- liftIO $ readIORef e
+        case Map.lookup name env of
+            Nothing -> throwError (UndefinedVar name)
+            Just value -> return value
+    Local  e p -> do
+        env <- liftIO $ readIORef e
+        case Map.lookup name env of 
             Nothing    -> get name p
-            Just value -> Just value
+            Just value -> return value
 
 
-define :: String -> Object -> Environment -> Environment
-define name value = \case
-    Global e   -> Global (Map.insert name value e)
-    Local  e p -> Local  (Map.insert name value e) p
+define :: String -> a -> Environment a -> IO ()
+define name value env = modifyIORef' (getEnv env) (Map.insert name value)
 
 
-mkFuncArgs :: [(String, Object)] -> Environment -> Environment
-mkFuncArgs pairs = Local (Map.fromList pairs)
+mkFuncArgs :: [(String, a)] -> Environment a -> IO ()
+mkFuncArgs pairs env = modifyIORef' (getEnv env) (`Map.union` Map.fromList pairs)    -- this is called a section
 
 
-assign :: String -> Object -> Environment -> (Environment, Bool)
+assign :: String -> a -> Environment a -> EnvAction a
 assign name value = \case
-    Global e -> case Map.lookup name e of
-        Nothing -> (Global e, False)
-        Just _  -> (Global (Map.insert name value e), True)
-    Local e p1 -> case Map.lookup name e of
-        Nothing -> 
-            let (p, b) = assign name value p1
-             in (Local e p, b)
-        Just _  -> (Local (Map.insert name value e) p1, True)
+    Global e -> do
+        env <- liftIO $ readIORef e
+        case Map.lookup name env of
+            Nothing -> throwError (UndefinedVar name)
+            Just _  -> do
+                liftIO $ modifyIORef' e (Map.insert name value)
+                pure value
+    Local e p -> do
+        env <- liftIO $ readIORef e
+        case Map.lookup name env of
+            Nothing -> assign name value p
+            Just _  -> do
+                liftIO $ modifyIORef' e (Map.insert name value)
+                pure value
+
+
+emptyEnv :: Environment a -> IO (Environment a)
+emptyEnv (Global e) = error "something really bad happened, delete Victim!"
+emptyEnv (Local e p) = createLocalEnv p

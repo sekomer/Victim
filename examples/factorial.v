@@ -11,5 +11,5 @@ fn fact (n)
 }
 
 
-print( fact(5) );
+print( fact(150) );
 

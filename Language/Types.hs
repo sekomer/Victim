@@ -4,6 +4,8 @@
 
 module Language.Types where
 
+import Language.Environment (Environment)
+
 {-
     Statement Data Type
 -}
@@ -62,20 +64,20 @@ data Object
     | String   !String
     | Bool     !Bool
     | Variable !String
-    | Function ![String] Statement  -- parameters, body
+    | Function ![String] Statement (Environment Object)  -- parameters, body, environment
     | Null
 
 
 -- implement Show class for Object
 instance Show Object where
     show = \case
-        Integer i    -> show i
-        Double d     -> show d
-        Bool b       -> show b
-        Variable v   -> show v
-        Function p b -> "<fn>"
-        Null         -> "null"
-        String s     -> s
+        Integer i      -> show i
+        Double d       -> show d
+        Bool b         -> show b
+        Variable v     -> show v
+        Function p b e -> "<fn>"
+        Null           -> "null"
+        String s       -> s
 
 
 
@@ -158,3 +160,4 @@ instance Num Object where
     signum _           = Null
 
     fromInteger = Integer
+
