@@ -4,14 +4,27 @@
 
 ## **Installation**
 
-You need `Glasgow Haskell Compiler` and `Cabal` to install `Victim` interpreter on your computer.
+You need `Glasgow Haskell Compiler` and `Cabal` to install `Victim` interpreter on your computer. Installing GHCup on your computer will do these for you.
 
+Installing GHCup
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://get-ghcup.haskell.org | sh
+```
+
+Installing Victim
 ```bash
 git clone https://github.com/Sekomer/Victim
 cd Victim
 cabal install -O2 --overwrite-policy=always 
 ```
 creates `Victim` symlink to original binary.
+
+### or
+
+**just run `setup.sh` script (you have to press enter several times)**
+```bash
+sh setup.sh
+```
 
 ## **Usage**
 To run `Victim` interpreter.
