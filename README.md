@@ -6,6 +6,11 @@
 
 You need `Glasgow Haskell Compiler` and `Cabal` to install `Victim` interpreter on your computer. Installing GHCup on your computer will do these for you.
 
+Before Installing GHCup
+```bash
+cd ~
+```
+
 Installing GHCup
 ```bash
 curl --proto '=https' --tlsv1.2 -sSf https://get-ghcup.haskell.org | sh
@@ -25,6 +30,36 @@ creates `Victim` symlink to original binary.
 ```bash
 sh setup.sh
 ```
+<details><summary><h3>For those who want to try on docker image</h3></summary>
+<br>
+  
+**Getting Dockerfile**
+```bash
+wget https://raw.githubusercontent.com/Sekomer/Victim/main/dockerfile
+```
+
+**Building Dockerfile**
+```bash
+sudo docker build -t sekomer/victim .
+```
+
+**Running Docker Image**
+```bash
+sudo docker run -p 2222:22 --name victim --hostname victim -d sekomer/victim
+```
+
+**Running SSH Server**
+```bash
+ssh test@localhost -p 2222
+```
+
+**On SSH Server, just run**
+```bash
+$ sudo su
+$ /root/.cabal/bin/Victim /root/Victim/examples/factorial.v
+```
+  
+</details>
 
 ## **Usage**
 To run `Victim` interpreter.
