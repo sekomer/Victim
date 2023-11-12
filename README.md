@@ -1,6 +1,6 @@
 # **Victim**
 
-`Victim` is dynamically typed lexically scoped interpreted scripting language written in `Haskell`. The name is inspired by source code of [malloc](https://code.woboq.org/userspace/glibc/malloc/malloc.c.html#3038).
+`Victim` is dynamically typed lexically scoped interpreted scripting language written in `Haskell`. The name is inspired by source code of [malloc](https://codebrowser.dev/glibc/glibc/malloc/malloc.c.html#3284).
 
 ## **Installation**
 
